@@ -109,4 +109,69 @@ fig_cdf.tight_layout()
 output_path_cdf = BASE_DIR / "plots" / "swebench_difficulty_cdf.pdf"
 fig_cdf.savefig(output_path_cdf, dpi=300, bbox_inches="tight")
 print(f"CDF plot saved to {output_path_cdf}")
+
+# --- Frontier model ability over time ---
+from scipy import stats
+
+df_abilities = pd.read_csv(BASE_DIR / "params" / "all_a_pyirt_abilities.csv")
+# Keep only models with release dates
+df_abilities = df_abilities.dropna(subset=["release_time"])
+df_abilities["release_date"] = pd.to_datetime(df_abilities["release_time"])
+df_abilities["release_months"] = (
+    (df_abilities["release_date"] - pd.Timestamp("2019-01-01")).dt.days / 30.44
+)
+
+# Compute the frontier: for each date, the max ability seen so far
+df_abilities = df_abilities.sort_values("release_date")
+df_abilities["frontier_ability"] = df_abilities["ability"].cummax()
+
+# Keep only frontier models (those that set a new max at their release)
+frontier = df_abilities[df_abilities["ability"] == df_abilities["frontier_ability"]].copy()
+
+# Linear regression on frontier
+slope, intercept, r_value, p_value, std_err = stats.linregress(
+    frontier["release_months"], frontier["ability"]
+)
+r2 = r_value ** 2
+
+fig_ab, ax_ab = plt.subplots(figsize=(10, 6))
+
+# Plot all models with release dates
+ax_ab.scatter(df_abilities["release_date"], df_abilities["ability"],
+              color="#adb5bd", s=30, alpha=0.5, zorder=2, label="All models")
+
+# Highlight frontier models
+ax_ab.scatter(frontier["release_date"], frontier["ability"],
+              color="#e63946", s=70, edgecolor="#6a040f", linewidth=1.2, zorder=4,
+              label=f"Frontier (n={len(frontier)})")
+
+# Regression line
+x_fit = np.linspace(df_abilities["release_months"].min(), df_abilities["release_months"].max(), 100)
+y_fit = slope * x_fit + intercept
+dates_fit = pd.Timestamp("2019-01-01") + pd.to_timedelta(x_fit * 30.44, unit="D")
+ax_ab.plot(dates_fit, y_fit, color="#023e8a", linewidth=2.5, linestyle="--", zorder=3,
+           label=f"Linear fit (R\u00b2={r2:.2f}, slope={slope:.3f}/mo)")
+
+# Label frontier models
+for _, row in frontier.iterrows():
+    label = row["subject_id"]
+    # Shorten labels for readability
+    for prefix in ["claude-", "gpt-", "gpt", "o", "gemini-"]:
+        if label.startswith(prefix):
+            break
+    ax_ab.annotate(label, (row["release_date"], row["ability"]),
+                   textcoords="offset points", xytext=(8, 4), fontsize=7,
+                   color="#1a1a1a", alpha=0.8)
+
+ax_ab.set_xlabel("Release Date", fontsize=14, labelpad=8)
+ax_ab.set_ylabel("Model Ability (\u03b8)", fontsize=14, labelpad=8)
+ax_ab.set_title("Frontier Model Ability Over Time", fontsize=16, fontweight="bold", pad=12)
+ax_ab.legend(loc="upper left", frameon=True, fancybox=True, facecolor="white", fontsize=11)
+ax_ab.grid(True, which="major", linestyle="--", alpha=0.4)
+
+fig_ab.tight_layout()
+output_path_ab = BASE_DIR / "plots" / "frontier_ability_over_time.pdf"
+fig_ab.savefig(output_path_ab, dpi=300, bbox_inches="tight")
+print(f"Frontier ability plot saved to {output_path_ab}")
+print(f"  Frontier regression: slope={slope:.4f}/month, intercept={intercept:.2f}, R\u00b2={r2:.3f}")
 plt.show()
