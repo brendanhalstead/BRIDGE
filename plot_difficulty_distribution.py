@@ -1,4 +1,4 @@
-"""Plot the distribution of IRT difficulty (b) for SWE-bench problems."""
+"""Plot the distribution of IRT difficulty (b) for benchmark problems."""
 
 import json
 from pathlib import Path
@@ -10,33 +10,55 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parent
 
 # --- Load data ---
-# IRT parameters (task_id, a, b, human_minutes)
 df_irt = pd.read_csv(BASE_DIR / "params" / "all_a_pyirt.csv")
 df_irt.rename(columns={df_irt.columns[0]: "task_id"}, inplace=True)
 
-# SWE-bench task IDs
-swebench_task_ids = set()
-with open(BASE_DIR / "data" / "swebench_normalized_results.jsonl") as f:
-    for line in f:
-        record = json.loads(line)
-        swebench_task_ids.add(record["task_id"])
-
-# Load baseline success rates
 df_bl = pd.read_csv(BASE_DIR / "params" / "all_a_pyirt_baseline.csv")
 df_bl.rename(columns={df_bl.columns[0]: "task_id"}, inplace=True)
 
-# Filter to SWE-bench tasks with valid difficulty
-swe_df = df_irt[df_irt["task_id"].isin(swebench_task_ids) & df_irt["b"].notna()].copy()
-swe_df = swe_df.merge(df_bl[["task_id", "success_rate"]], on="task_id", how="left")
+# Collect task IDs per benchmark from normalized results
+BENCHMARKS = {
+    "SWE-bench": "swebench",
+    "GDPval": "gdpval",
+    "Cybench": "cybench",
+}
+
+benchmark_task_ids = {}
+for display_name, file_key in BENCHMARKS.items():
+    ids = set()
+    with open(BASE_DIR / "data" / f"{file_key}_normalized_results.jsonl") as f:
+        for line in f:
+            ids.add(json.loads(line)["task_id"])
+    benchmark_task_ids[display_name] = ids
+
+# MLE-bench tasks use task_id::metric format in IRT params
+mlebench_ids = set()
+with open(BASE_DIR / "data" / "mlebench_normalized_results.jsonl") as f:
+    for line in f:
+        mlebench_ids.add(json.loads(line)["task_id"])
+# Match IRT items whose prefix (before ::) is an MLE-bench task
+mlebench_irt_ids = set()
+for task_id in df_irt["task_id"]:
+    base = task_id.split("::")[0]
+    if base in mlebench_ids:
+        mlebench_irt_ids.add(task_id)
+benchmark_task_ids["MLE-bench"] = mlebench_irt_ids
+
+# Build per-benchmark dataframes
+benchmark_data = {}
+for name, ids in benchmark_task_ids.items():
+    bdf = df_irt[df_irt["task_id"].isin(ids) & df_irt["b"].notna()].copy()
+    bdf = bdf.merge(df_bl[["task_id", "success_rate"]], on="task_id", how="left")
+    n_unsolved = (bdf["success_rate"] == 0).sum()
+    n_solved = len(bdf) - n_unsolved
+    print(f"{name}: {len(bdf)} items in IRT ({n_solved} solved, {n_unsolved} never solved)")
+    benchmark_data[name] = bdf
+
+# Use SWE-bench as the primary for the histogram
+swe_df = benchmark_data["SWE-bench"]
 difficulty = swe_df["b"].to_numpy()
 diff_solved = swe_df.loc[swe_df["success_rate"] > 0, "b"].to_numpy()
 diff_unsolved = swe_df.loc[swe_df["success_rate"] == 0, "b"].to_numpy()
-
-print(f"SWE-bench tasks with IRT difficulty: {len(difficulty)}")
-print(f"  min b = {difficulty.min():.2f}")
-print(f"  max b = {difficulty.max():.2f}")
-print(f"  mean b = {difficulty.mean():.2f}")
-print(f"  median b = {np.median(difficulty):.2f}")
 
 # --- Plot ---
 plt.rcParams.update({
@@ -82,48 +104,59 @@ output_path = BASE_DIR / "plots" / "swebench_difficulty_distribution.pdf"
 fig.savefig(output_path, dpi=300, bbox_inches="tight")
 print(f"\nPlot saved to {output_path}")
 
-# --- CDF Plot ---
-fig_cdf, ax_cdf = plt.subplots(figsize=(8, 6.5))
+# --- CDF Plot function ---
+def plot_cdf(difficulty_vals, title, file_key, n_unsolved=0):
+    """Plot a CDF of IRT difficulty with percentile markers and methodology note."""
+    fig, ax = plt.subplots(figsize=(8, 6.5))
+    mono = {"fontfamily": "monospace"}
 
-# Monospace font for entire CDF plot
-cdf_font = {"fontfamily": "monospace"}
+    sorted_d = np.sort(difficulty_vals)
+    cdf_vals = np.arange(1, len(sorted_d) + 1) / len(sorted_d)
+    ax.plot(sorted_d, cdf_vals, color=PRIMARY_COLOR, linewidth=2.5)
 
-sorted_diff = np.sort(difficulty)
-cdf = np.arange(1, len(sorted_diff) + 1) / len(sorted_diff)
-ax_cdf.plot(sorted_diff, cdf, color=PRIMARY_COLOR, linewidth=2.5)
+    for pct, color, ls in zip(percentiles, colors, linestyles):
+        val = np.percentile(difficulty_vals, pct)
+        frac = pct / 100
+        ax.hlines(frac, ax.get_xlim()[0] if ax.get_xlim()[0] < val else sorted_d[0] - 1,
+                  val, color=color, linestyle=ls, linewidth=1.2, alpha=0.6)
+        ax.vlines(val, 0, frac, color=color, linestyle=ls, linewidth=1.2, alpha=0.6)
+        ax.plot(val, frac, 'o', color=color, markersize=6, zorder=5, label=f"P{pct} = {val:.2f}")
 
-# Add horizontal + vertical lines for the same percentiles
-for pct, color, ls in zip(percentiles, colors, linestyles):
-    val = np.percentile(difficulty, pct)
-    frac = pct / 100
-    ax_cdf.hlines(frac, ax_cdf.get_xlim()[0] if ax_cdf.get_xlim()[0] < val else sorted_diff[0] - 1,
-                   val, color=color, linestyle=ls, linewidth=1.2, alpha=0.6)
-    ax_cdf.vlines(val, 0, frac, color=color, linestyle=ls, linewidth=1.2, alpha=0.6)
-    ax_cdf.plot(val, frac, 'o', color=color, markersize=6, zorder=5, label=f"P{pct} = {val:.2f}")
+    ax.set_xlabel("Task Difficulty (b)", fontsize=14, labelpad=8, **mono)
+    ax.set_ylabel("Cumulative Proportion", fontsize=14, labelpad=8, **mono)
+    ax.set_title(f"{title}: CDF of IRT Difficulty", fontsize=16, fontweight="bold", pad=12, **mono)
+    ax.legend(loc="lower right", frameon=True, fancybox=True, facecolor="white",
+              prop={"family": "monospace", "size": 12})
+    ax.grid(True, which="major", linestyle="--", alpha=0.4)
+    ax.set_ylim(0, 1.02)
+    for label in ax.get_xticklabels() + ax.get_yticklabels():
+        label.set_fontfamily("monospace")
 
-ax_cdf.set_xlabel("Task Difficulty (b)", fontsize=14, labelpad=8, **cdf_font)
-ax_cdf.set_ylabel("Cumulative Proportion", fontsize=14, labelpad=8, **cdf_font)
-ax_cdf.set_title("SWE-bench: CDF of IRT Difficulty", fontsize=16, fontweight="bold", pad=12, **cdf_font)
-ax_cdf.legend(loc="lower right", frameon=True, fancybox=True, facecolor="white", prop={"family": "monospace", "size": 12})
-ax_cdf.grid(True, which="major", linestyle="--", alpha=0.4)
-ax_cdf.set_ylim(0, 1.02)
-for label in ax_cdf.get_xticklabels() + ax_cdf.get_yticklabels():
-    label.set_fontfamily("monospace")
-
-# Fine print methodology
-methodology = (
-    "Difficulty (b) estimated via 2-parameter logistic IRT (py-irt, hierarchical priors, 1000 epochs SVI).\n"
-    "500 SWE-bench Verified tasks scored binary pass/fail across 176 model+scaffold submissions.\n"
-    "32 tasks never solved by any model; their b values are prior-regularized extrapolations."
-)
-fig_cdf.text(0.5, -0.02, methodology, ha="center", va="top", fontsize=7,
+    n_total = len(difficulty_vals)
+    unsolved_line = ""
+    if n_unsolved > 0:
+        unsolved_line = f"\n{n_unsolved} items never solved by any model; their b values are prior-regularized extrapolations."
+    methodology = (
+        f"Difficulty (b) estimated via 2-parameter logistic IRT (py-irt, hierarchical priors, 1000 epochs SVI).\n"
+        f"{n_total} {title} items scored binary pass/fail across 176 model+scaffold submissions."
+        f"{unsolved_line}"
+    )
+    fig.text(0.5, -0.02, methodology, ha="center", va="top", fontsize=7,
              fontfamily="monospace", color="#555555", style="italic")
 
-fig_cdf.tight_layout()
-fig_cdf.subplots_adjust(bottom=0.18)
-output_path_cdf = BASE_DIR / "plots" / "swebench_difficulty_cdf.pdf"
-fig_cdf.savefig(output_path_cdf, dpi=300, bbox_inches="tight")
-print(f"CDF plot saved to {output_path_cdf}")
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.18)
+    out = BASE_DIR / "plots" / f"{file_key}_difficulty_cdf.pdf"
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    print(f"CDF plot saved to {out}")
+    plt.close(fig)
+
+# Generate CDF for each benchmark
+FILE_KEYS = {"SWE-bench": "swebench", "GDPval": "gdpval", "MLE-bench": "mlebench", "Cybench": "cybench"}
+for name, bdf in benchmark_data.items():
+    vals = bdf["b"].to_numpy()
+    n_unsolved = (bdf["success_rate"] == 0).sum()
+    plot_cdf(vals, name, FILE_KEYS[name], n_unsolved=n_unsolved)
 
 # --- Frontier model ability over time ---
 from scipy import stats
