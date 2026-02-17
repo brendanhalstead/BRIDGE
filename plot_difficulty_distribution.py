@@ -64,9 +64,9 @@ ax.hist(diff_unsolved, bins=bins, color="#d62828", alpha=0.6, edgecolor="#6a040f
         linewidth=1.2, hatch="///", label=f"Never solved (n={len(diff_unsolved)})")
 
 # Add vertical lines for percentiles
-percentiles = [25, 50, 60, 70, 80, 90]
-colors = ["#2a9d8f", "#f77f00", "#e63946", "#7209b7", "#0077b6", "#023e8a"]
-linestyles = ["--", "-.", "--", "-.", "--", "-."]
+percentiles = [10, 30, 50, 70, 90]
+colors = ["#2a9d8f", "#f77f00", "#e63946", "#7209b7", "#023e8a"]
+linestyles = ["--", "-.", "--", "-.", "--"]
 for pct, color, ls in zip(percentiles, colors, linestyles):
     val = np.percentile(difficulty, pct)
     ax.axvline(val, color=color, linestyle=ls, linewidth=1.8, label=f"P{pct} = {val:.2f}")
