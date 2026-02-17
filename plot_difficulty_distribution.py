@@ -223,6 +223,7 @@ for label in ax_ab.get_xticklabels() + ax_ab.get_yticklabels():
     label.set_fontfamily("monospace")
 
 fig_ab.text(0.5, -0.02,
+    'Ability (\u03b8) jointly estimated via 2PL IRT across SWE-bench, GDPval, MLE-bench, and Cybench.\n'
     'Adopted from the data in Liu et al., "BRIDGE: Predicting Human Task Completion Time '
     'From Model Performance" (arXiv:2602.07267, 2026).',
     ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
