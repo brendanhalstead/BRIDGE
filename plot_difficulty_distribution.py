@@ -139,7 +139,8 @@ def plot_cdf(difficulty_vals, title, file_key, n_unsolved=0):
     methodology = (
         f"Difficulty (b) estimated via 2-parameter logistic IRT (py-irt, hierarchical priors, 1000 epochs SVI).\n"
         f"{n_total} {title} items scored binary pass/fail across 176 model+scaffold submissions."
-        f"{unsolved_line}"
+        f"{unsolved_line}\n"
+        f"Data: Liu et al., \"BRIDGE: Predicting Human Task Completion Time From Model Performance\" (arXiv:2602.07267, 2026)."
     )
     fig.text(0.5, -0.02, methodology, ha="center", va="top", fontsize=7,
              fontfamily="monospace", color="#555555", style="italic")
