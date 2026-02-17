@@ -198,7 +198,15 @@ slope, intercept, r_value, p_value, std_err = stats.linregress(
 )
 r2 = r_value ** 2
 
-fig_ab, ax_ab = plt.subplots(figsize=(10, 6))
+import seaborn as sns
+
+# Aggregate all task difficulties for the violin
+all_difficulty = df_irt["b"].dropna().to_numpy()
+
+fig_ab, (ax_ab, ax_violin) = plt.subplots(
+    1, 2, figsize=(12, 6), width_ratios=[5, 1], sharey=True,
+    gridspec_kw={"wspace": 0.02},
+)
 
 # Plot all models with release dates
 ax_ab.scatter(df_abilities["release_date"], df_abilities["ability"],
@@ -219,7 +227,6 @@ ax_ab.plot(dates_fit, y_fit, color="#023e8a", linewidth=2.5, linestyle="--", zor
 # Label frontier models
 for _, row in frontier.iterrows():
     label = row["subject_id"]
-    # Shorten labels for readability
     for prefix in ["claude-", "gpt-", "gpt", "o", "gemini-"]:
         if label.startswith(prefix):
             break
@@ -229,13 +236,30 @@ for _, row in frontier.iterrows():
 
 mono_ab = {"fontfamily": "monospace"}
 ax_ab.set_xlabel("Release Date", fontsize=14, labelpad=8, **mono_ab)
-ax_ab.set_ylabel("Model Ability (\u03b8)", fontsize=14, labelpad=8, **mono_ab)
+ax_ab.set_ylabel("Model Ability (\u03b8) / Task Difficulty (b)", fontsize=14, labelpad=8, **mono_ab)
 ax_ab.set_title("Frontier Model Ability Over Time", fontsize=16, fontweight="bold", pad=12, **mono_ab)
 ax_ab.legend(loc="upper left", frameon=True, fancybox=True, facecolor="white",
              prop={"family": "monospace", "size": 11})
 ax_ab.grid(True, which="major", linestyle="--", alpha=0.4)
 for label in ax_ab.get_xticklabels() + ax_ab.get_yticklabels():
     label.set_fontfamily("monospace")
+
+# --- Violin plot of task difficulty ---
+parts = ax_violin.violinplot(all_difficulty, positions=[0], showmedians=True, showextrema=False, vert=True)
+for body in parts["bodies"]:
+    body.set_facecolor(PRIMARY_COLOR)
+    body.set_alpha(0.5)
+    body.set_edgecolor(EDGE_COLOR)
+    body.set_linewidth(1.2)
+parts["cmedians"].set_color("#e63946")
+parts["cmedians"].set_linewidth(2)
+
+ax_violin.set_xticks([0])
+ax_violin.set_xticklabels(["Task\nDifficulty\n(b)"], fontsize=9, fontfamily="monospace")
+ax_violin.tick_params(axis="y", labelleft=False)
+ax_violin.grid(True, which="major", linestyle="--", alpha=0.4)
+ax_violin.spines["top"].set_visible(False)
+ax_violin.spines["right"].set_visible(False)
 
 fig_ab.text(0.5, -0.02,
     'Ability (\u03b8) jointly estimated via 2PL IRT across SWE-bench, GDPval, MLE-bench, Cybench, RE-Bench, HCAST, and SWAA.\n'
@@ -244,7 +268,7 @@ fig_ab.text(0.5, -0.02,
     ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
 
 fig_ab.tight_layout()
-fig_ab.subplots_adjust(bottom=0.12)
+fig_ab.subplots_adjust(bottom=0.14)
 output_path_ab = BASE_DIR / "plots" / "frontier_ability_over_time.pdf"
 fig_ab.savefig(output_path_ab, dpi=300, bbox_inches="tight")
 print(f"Frontier ability plot saved to {output_path_ab}")
