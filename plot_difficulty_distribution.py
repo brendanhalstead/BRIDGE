@@ -21,9 +21,16 @@ with open(BASE_DIR / "data" / "swebench_normalized_results.jsonl") as f:
         record = json.loads(line)
         swebench_task_ids.add(record["task_id"])
 
+# Load baseline success rates
+df_bl = pd.read_csv(BASE_DIR / "params" / "all_a_pyirt_baseline.csv")
+df_bl.rename(columns={df_bl.columns[0]: "task_id"}, inplace=True)
+
 # Filter to SWE-bench tasks with valid difficulty
 swe_df = df_irt[df_irt["task_id"].isin(swebench_task_ids) & df_irt["b"].notna()].copy()
+swe_df = swe_df.merge(df_bl[["task_id", "success_rate"]], on="task_id", how="left")
 difficulty = swe_df["b"].to_numpy()
+diff_solved = swe_df.loc[swe_df["success_rate"] > 0, "b"].to_numpy()
+diff_unsolved = swe_df.loc[swe_df["success_rate"] == 0, "b"].to_numpy()
 
 print(f"SWE-bench tasks with IRT difficulty: {len(difficulty)}")
 print(f"  min b = {difficulty.min():.2f}")
@@ -51,7 +58,10 @@ EDGE_COLOR = "#023e8a"
 fig, ax = plt.subplots(figsize=(8, 5))
 
 bins = np.linspace(difficulty.min() - 0.5, difficulty.max() + 0.5, 35)
-ax.hist(difficulty, bins=bins, color=PRIMARY_COLOR, alpha=0.5, edgecolor=EDGE_COLOR, linewidth=1.2)
+ax.hist(diff_solved, bins=bins, color=PRIMARY_COLOR, alpha=0.5, edgecolor=EDGE_COLOR,
+        linewidth=1.2, label=f"Solved by at least 1 model (n={len(diff_solved)})")
+ax.hist(diff_unsolved, bins=bins, color="#d62828", alpha=0.6, edgecolor="#6a040f",
+        linewidth=1.2, hatch="///", label=f"Never solved (n={len(diff_unsolved)})")
 
 # Add vertical lines for percentiles
 percentiles = [25, 50, 60, 70, 80, 90]
@@ -64,7 +74,7 @@ for pct, color, ls in zip(percentiles, colors, linestyles):
 ax.set_xlabel("Task Difficulty (b)", fontsize=14, labelpad=8)
 ax.set_ylabel("Number of Tasks", fontsize=14, labelpad=8)
 ax.set_title("SWE-bench: Distribution of IRT Difficulty", fontsize=16, fontweight="bold", pad=12)
-ax.legend(loc="upper right", frameon=True, fancybox=True, facecolor="white")
+ax.legend(loc="upper right", frameon=True, fancybox=True, facecolor="white", fontsize=10)
 ax.grid(True, which="major", linestyle="--", alpha=0.4)
 
 fig.tight_layout()
