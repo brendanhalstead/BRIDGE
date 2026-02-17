@@ -358,3 +358,40 @@ print(f"  Refit abilities: {len(df_abilities_no_metr)} models with release dates
 plot_frontier(df_abilities_no_metr, frontier_no_metr, slope_nm, intercept_nm, r2_nm,
               kept_difficulty, kept_names, "frontier_ability_over_time_no_metr.pdf",
               title_suffix="(excluding HCAST, RE-Bench, SWAA)")
+
+# SWE-bench-only IRT — refit on SWE-bench tasks exclusively
+df_irt_swe = pd.read_csv(BASE_DIR / "params" / "swebench_only_pyirt.csv")
+df_irt_swe.rename(columns={df_irt_swe.columns[0]: "task_id"}, inplace=True)
+swe_only_difficulty = df_irt_swe["b"].dropna().to_numpy()
+
+df_abilities_swe = pd.read_csv(BASE_DIR / "params" / "swebench_only_pyirt_abilities.csv")
+df_abilities_swe = df_abilities_swe.dropna(subset=["release_time"])
+df_abilities_swe["release_date"] = pd.to_datetime(df_abilities_swe["release_time"])
+df_abilities_swe["release_months"] = (
+    (df_abilities_swe["release_date"] - pd.Timestamp("2019-01-01")).dt.days / 30.44
+)
+df_abilities_swe = df_abilities_swe.sort_values("release_date")
+df_abilities_swe["frontier_ability"] = df_abilities_swe["ability"].cummax()
+frontier_swe = df_abilities_swe[
+    df_abilities_swe["ability"] == df_abilities_swe["frontier_ability"]
+].copy()
+
+slope_swe, intercept_swe, r_value_swe, _, _ = stats.linregress(
+    frontier_swe["release_months"], frontier_swe["ability"]
+)
+r2_swe = r_value_swe ** 2
+
+print(f"\nSWE-bench-only (refit): {len(swe_only_difficulty)} tasks")
+print(f"  Abilities: {len(df_abilities_swe)} models with release dates")
+
+# CDF of SWE-bench-only difficulty
+swe_bl = df_irt_swe.merge(df_bl[["task_id", "success_rate"]], on="task_id", how="left")
+n_unsolved_swe = (swe_bl["success_rate"] == 0).sum()
+plot_cdf(swe_only_difficulty, "SWE-bench (single-benchmark IRT)", "swebench_only",
+         n_unsolved=n_unsolved_swe)
+
+# Frontier plot for SWE-bench-only
+plot_frontier(df_abilities_swe, frontier_swe, slope_swe, intercept_swe, r2_swe,
+              swe_only_difficulty, ["SWE-bench"],
+              "frontier_ability_over_time_swebench_only.pdf",
+              title_suffix="(SWE-bench-only IRT)")
