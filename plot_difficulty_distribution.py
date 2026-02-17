@@ -44,6 +44,18 @@ for task_id in df_irt["task_id"]:
         mlebench_irt_ids.add(task_id)
 benchmark_task_ids["MLE-bench"] = mlebench_irt_ids
 
+# METR benchmarks (RE-Bench, HCAST, SWAA) — identified via task_source in all_runs.jsonl
+metr_source_ids = {}
+with open(BASE_DIR / "data" / "all_runs.jsonl") as f:
+    for line in f:
+        r = json.loads(line)
+        src = r["task_source"]
+        if src not in metr_source_ids:
+            metr_source_ids[src] = set()
+        metr_source_ids[src].add(r["task_id"])
+for src, ids in metr_source_ids.items():
+    benchmark_task_ids[src] = ids
+
 # Build per-benchmark dataframes
 benchmark_data = {}
 for name, ids in benchmark_task_ids.items():
@@ -153,7 +165,10 @@ def plot_cdf(difficulty_vals, title, file_key, n_unsolved=0):
     plt.close(fig)
 
 # Generate CDF for each benchmark
-FILE_KEYS = {"SWE-bench": "swebench", "GDPval": "gdpval", "MLE-bench": "mlebench", "Cybench": "cybench"}
+FILE_KEYS = {
+    "SWE-bench": "swebench", "GDPval": "gdpval", "MLE-bench": "mlebench",
+    "Cybench": "cybench", "RE-Bench": "rebench", "HCAST": "hcast", "SWAA": "swaa",
+}
 for name, bdf in benchmark_data.items():
     vals = bdf["b"].to_numpy()
     n_unsolved = (bdf["success_rate"] == 0).sum()
@@ -223,7 +238,7 @@ for label in ax_ab.get_xticklabels() + ax_ab.get_yticklabels():
     label.set_fontfamily("monospace")
 
 fig_ab.text(0.5, -0.02,
-    'Ability (\u03b8) jointly estimated via 2PL IRT across SWE-bench, GDPval, MLE-bench, and Cybench.\n'
+    'Ability (\u03b8) jointly estimated via 2PL IRT across SWE-bench, GDPval, MLE-bench, Cybench, RE-Bench, HCAST, and SWAA.\n'
     'Adopted from the data in Liu et al., "BRIDGE: Predicting Human Task Completion Time '
     'From Model Performance" (arXiv:2602.07267, 2026).',
     ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
