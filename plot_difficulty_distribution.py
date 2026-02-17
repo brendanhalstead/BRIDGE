@@ -247,79 +247,94 @@ slope, intercept, r_value, p_value, std_err = stats.linregress(
 )
 r2 = r_value ** 2
 
-import seaborn as sns
+def plot_frontier(df_abilities, frontier, slope, intercept, r2,
+                  violin_difficulty, bench_names, output_file, title_suffix=""):
+    """Plot frontier ability over time with a difficulty violin on the right."""
+    fig, (ax_main, ax_vln) = plt.subplots(
+        1, 2, figsize=(12, 6), width_ratios=[5, 1], sharey=True,
+        gridspec_kw={"wspace": 0.02},
+    )
 
-# Aggregate all task difficulties for the violin
+    ax_main.scatter(df_abilities["release_date"], df_abilities["ability"],
+                    color="#adb5bd", s=30, alpha=0.5, zorder=2, label="All models")
+    ax_main.scatter(frontier["release_date"], frontier["ability"],
+                    color="#e63946", s=70, edgecolor="#6a040f", linewidth=1.2, zorder=4,
+                    label=f"Frontier (n={len(frontier)})")
+
+    x_fit = np.linspace(df_abilities["release_months"].min(), df_abilities["release_months"].max(), 100)
+    y_fit = slope * x_fit + intercept
+    dates_fit = pd.Timestamp("2019-01-01") + pd.to_timedelta(x_fit * 30.44, unit="D")
+    ax_main.plot(dates_fit, y_fit, color="#023e8a", linewidth=2.5, linestyle="--", zorder=3,
+                 label=f"Linear fit (R\u00b2={r2:.2f}, slope={slope:.3f}/mo)")
+
+    for _, row in frontier.iterrows():
+        lbl = row["subject_id"]
+        for prefix in ["claude-", "gpt-", "gpt", "o", "gemini-"]:
+            if lbl.startswith(prefix):
+                break
+        ax_main.annotate(lbl, (row["release_date"], row["ability"]),
+                         textcoords="offset points", xytext=(8, 4), fontsize=7,
+                         fontfamily="monospace", color="#1a1a1a", alpha=0.8)
+
+    mono = {"fontfamily": "monospace"}
+    title = "Frontier Model Ability Over Time"
+    if title_suffix:
+        title += f"\n{title_suffix}"
+    ax_main.set_xlabel("Release Date", fontsize=14, labelpad=8, **mono)
+    ax_main.set_ylabel("Model Ability (\u03b8) / Task Difficulty (b)", fontsize=14, labelpad=8, **mono)
+    ax_main.set_title(title, fontsize=16, fontweight="bold", pad=12, **mono)
+    ax_main.legend(loc="upper left", frameon=True, fancybox=True, facecolor="white",
+                   prop={"family": "monospace", "size": 11})
+    ax_main.grid(True, which="major", linestyle="--", alpha=0.4)
+    for lbl in ax_main.get_xticklabels() + ax_main.get_yticklabels():
+        lbl.set_fontfamily("monospace")
+
+    # Violin
+    parts = ax_vln.violinplot(violin_difficulty, positions=[0], showmedians=True, showextrema=False, vert=True)
+    for body in parts["bodies"]:
+        body.set_facecolor(PRIMARY_COLOR)
+        body.set_alpha(0.5)
+        body.set_edgecolor(EDGE_COLOR)
+        body.set_linewidth(1.2)
+    parts["cmedians"].set_color("#e63946")
+    parts["cmedians"].set_linewidth(2)
+    ax_vln.set_xticks([0])
+    ax_vln.set_xticklabels(["Task\nDifficulty\n(b)"], fontsize=9, fontfamily="monospace")
+    ax_vln.tick_params(axis="y", labelleft=False)
+    ax_vln.grid(True, which="major", linestyle="--", alpha=0.4)
+    ax_vln.spines["top"].set_visible(False)
+    ax_vln.spines["right"].set_visible(False)
+
+    bench_list = ", ".join(bench_names)
+    fig.text(0.5, -0.02,
+        f"Ability (\u03b8) jointly estimated via 2PL IRT. Violin shows difficulty from: {bench_list}.\n"
+        'Adopted from the data in Liu et al., "BRIDGE: Predicting Human Task Completion Time '
+        'From Model Performance" (arXiv:2602.07267, 2026).',
+        ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
+
+    fig.tight_layout()
+    fig.subplots_adjust(bottom=0.14)
+    out = BASE_DIR / "plots" / output_file
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    print(f"Frontier plot saved to {out}")
+    print(f"  Regression: slope={slope:.4f}/mo, intercept={intercept:.2f}, R\u00b2={r2:.3f}")
+    plt.close(fig)
+
+
+# All benchmarks
 all_difficulty = df_irt["b"].dropna().to_numpy()
+all_bench_names = list(FILE_KEYS.keys())
+plot_frontier(df_abilities, frontier, slope, intercept, r2,
+              all_difficulty, all_bench_names, "frontier_ability_over_time.pdf")
 
-fig_ab, (ax_ab, ax_violin) = plt.subplots(
-    1, 2, figsize=(12, 6), width_ratios=[5, 1], sharey=True,
-    gridspec_kw={"wspace": 0.02},
-)
-
-# Plot all models with release dates
-ax_ab.scatter(df_abilities["release_date"], df_abilities["ability"],
-              color="#adb5bd", s=30, alpha=0.5, zorder=2, label="All models")
-
-# Highlight frontier models
-ax_ab.scatter(frontier["release_date"], frontier["ability"],
-              color="#e63946", s=70, edgecolor="#6a040f", linewidth=1.2, zorder=4,
-              label=f"Frontier (n={len(frontier)})")
-
-# Regression line
-x_fit = np.linspace(df_abilities["release_months"].min(), df_abilities["release_months"].max(), 100)
-y_fit = slope * x_fit + intercept
-dates_fit = pd.Timestamp("2019-01-01") + pd.to_timedelta(x_fit * 30.44, unit="D")
-ax_ab.plot(dates_fit, y_fit, color="#023e8a", linewidth=2.5, linestyle="--", zorder=3,
-           label=f"Linear fit (R\u00b2={r2:.2f}, slope={slope:.3f}/mo)")
-
-# Label frontier models
-for _, row in frontier.iterrows():
-    label = row["subject_id"]
-    for prefix in ["claude-", "gpt-", "gpt", "o", "gemini-"]:
-        if label.startswith(prefix):
-            break
-    ax_ab.annotate(label, (row["release_date"], row["ability"]),
-                   textcoords="offset points", xytext=(8, 4), fontsize=7,
-                   fontfamily="monospace", color="#1a1a1a", alpha=0.8)
-
-mono_ab = {"fontfamily": "monospace"}
-ax_ab.set_xlabel("Release Date", fontsize=14, labelpad=8, **mono_ab)
-ax_ab.set_ylabel("Model Ability (\u03b8) / Task Difficulty (b)", fontsize=14, labelpad=8, **mono_ab)
-ax_ab.set_title("Frontier Model Ability Over Time", fontsize=16, fontweight="bold", pad=12, **mono_ab)
-ax_ab.legend(loc="upper left", frameon=True, fancybox=True, facecolor="white",
-             prop={"family": "monospace", "size": 11})
-ax_ab.grid(True, which="major", linestyle="--", alpha=0.4)
-for label in ax_ab.get_xticklabels() + ax_ab.get_yticklabels():
-    label.set_fontfamily("monospace")
-
-# --- Violin plot of task difficulty ---
-parts = ax_violin.violinplot(all_difficulty, positions=[0], showmedians=True, showextrema=False, vert=True)
-for body in parts["bodies"]:
-    body.set_facecolor(PRIMARY_COLOR)
-    body.set_alpha(0.5)
-    body.set_edgecolor(EDGE_COLOR)
-    body.set_linewidth(1.2)
-parts["cmedians"].set_color("#e63946")
-parts["cmedians"].set_linewidth(2)
-
-ax_violin.set_xticks([0])
-ax_violin.set_xticklabels(["Task\nDifficulty\n(b)"], fontsize=9, fontfamily="monospace")
-ax_violin.tick_params(axis="y", labelleft=False)
-ax_violin.grid(True, which="major", linestyle="--", alpha=0.4)
-ax_violin.spines["top"].set_visible(False)
-ax_violin.spines["right"].set_visible(False)
-
-fig_ab.text(0.5, -0.02,
-    'Ability (\u03b8) jointly estimated via 2PL IRT across SWE-bench, GDPval, MLE-bench, Cybench, RE-Bench, HCAST, and SWAA.\n'
-    'Adopted from the data in Liu et al., "BRIDGE: Predicting Human Task Completion Time '
-    'From Model Performance" (arXiv:2602.07267, 2026).',
-    ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
-
-fig_ab.tight_layout()
-fig_ab.subplots_adjust(bottom=0.14)
-output_path_ab = BASE_DIR / "plots" / "frontier_ability_over_time.pdf"
-fig_ab.savefig(output_path_ab, dpi=300, bbox_inches="tight")
-print(f"Frontier ability plot saved to {output_path_ab}")
-print(f"  Frontier regression: slope={slope:.4f}/month, intercept={intercept:.2f}, R\u00b2={r2:.3f}")
-plt.show()
+# Excluding HCAST, RE-Bench, SWAA
+held_out = {"HCAST", "RE-Bench", "SWAA"}
+kept_names = [n for n in FILE_KEYS if n not in held_out]
+kept_ids = set()
+for n in kept_names:
+    kept_ids.update(benchmark_data[n]["task_id"])
+kept_difficulty = df_irt[df_irt["task_id"].isin(kept_ids) & df_irt["b"].notna()]["b"].to_numpy()
+print(f"\nHeld-out version: {len(kept_difficulty)} tasks from {kept_names}")
+plot_frontier(df_abilities, frontier, slope, intercept, r2,
+              kept_difficulty, kept_names, "frontier_ability_over_time_no_metr.pdf",
+              title_suffix="(excluding HCAST, RE-Bench, SWAA)")
