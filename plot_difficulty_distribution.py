@@ -327,14 +327,34 @@ all_bench_names = list(FILE_KEYS.keys())
 plot_frontier(df_abilities, frontier, slope, intercept, r2,
               all_difficulty, all_bench_names, "frontier_ability_over_time.pdf")
 
-# Excluding HCAST, RE-Bench, SWAA
+# Excluding HCAST, RE-Bench, SWAA — use REFIT IRT parameters
 held_out = {"HCAST", "RE-Bench", "SWAA"}
 kept_names = [n for n in FILE_KEYS if n not in held_out]
-kept_ids = set()
-for n in kept_names:
-    kept_ids.update(benchmark_data[n]["task_id"])
-kept_difficulty = df_irt[df_irt["task_id"].isin(kept_ids) & df_irt["b"].notna()]["b"].to_numpy()
-print(f"\nHeld-out version: {len(kept_difficulty)} tasks from {kept_names}")
-plot_frontier(df_abilities, frontier, slope, intercept, r2,
+
+# Load refit item parameters and abilities (fitted on 4-benchmark subset)
+df_irt_no_metr = pd.read_csv(BASE_DIR / "params" / "no_metr_pyirt.csv")
+df_irt_no_metr.rename(columns={df_irt_no_metr.columns[0]: "task_id"}, inplace=True)
+kept_difficulty = df_irt_no_metr["b"].dropna().to_numpy()
+
+df_abilities_no_metr = pd.read_csv(BASE_DIR / "params" / "no_metr_pyirt_abilities.csv")
+df_abilities_no_metr = df_abilities_no_metr.dropna(subset=["release_time"])
+df_abilities_no_metr["release_date"] = pd.to_datetime(df_abilities_no_metr["release_time"])
+df_abilities_no_metr["release_months"] = (
+    (df_abilities_no_metr["release_date"] - pd.Timestamp("2019-01-01")).dt.days / 30.44
+)
+df_abilities_no_metr = df_abilities_no_metr.sort_values("release_date")
+df_abilities_no_metr["frontier_ability"] = df_abilities_no_metr["ability"].cummax()
+frontier_no_metr = df_abilities_no_metr[
+    df_abilities_no_metr["ability"] == df_abilities_no_metr["frontier_ability"]
+].copy()
+
+slope_nm, intercept_nm, r_value_nm, p_value_nm, std_err_nm = stats.linregress(
+    frontier_no_metr["release_months"], frontier_no_metr["ability"]
+)
+r2_nm = r_value_nm ** 2
+
+print(f"\nHeld-out version (refit): {len(kept_difficulty)} tasks from {kept_names}")
+print(f"  Refit abilities: {len(df_abilities_no_metr)} models with release dates")
+plot_frontier(df_abilities_no_metr, frontier_no_metr, slope_nm, intercept_nm, r2_nm,
               kept_difficulty, kept_names, "frontier_ability_over_time_no_metr.pdf",
               title_suffix="(excluding HCAST, RE-Bench, SWAA)")
