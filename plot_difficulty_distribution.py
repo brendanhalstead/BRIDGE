@@ -83,7 +83,10 @@ fig.savefig(output_path, dpi=300, bbox_inches="tight")
 print(f"\nPlot saved to {output_path}")
 
 # --- CDF Plot ---
-fig_cdf, ax_cdf = plt.subplots(figsize=(8, 5))
+fig_cdf, ax_cdf = plt.subplots(figsize=(8, 6.5))
+
+# Monospace font for entire CDF plot
+cdf_font = {"fontfamily": "monospace"}
 
 sorted_diff = np.sort(difficulty)
 cdf = np.arange(1, len(sorted_diff) + 1) / len(sorted_diff)
@@ -98,14 +101,26 @@ for pct, color, ls in zip(percentiles, colors, linestyles):
     ax_cdf.vlines(val, 0, frac, color=color, linestyle=ls, linewidth=1.2, alpha=0.6)
     ax_cdf.plot(val, frac, 'o', color=color, markersize=6, zorder=5, label=f"P{pct} = {val:.2f}")
 
-ax_cdf.set_xlabel("Task Difficulty (b)", fontsize=14, labelpad=8)
-ax_cdf.set_ylabel("Cumulative Proportion", fontsize=14, labelpad=8)
-ax_cdf.set_title("SWE-bench: CDF of IRT Difficulty", fontsize=16, fontweight="bold", pad=12)
-ax_cdf.legend(loc="lower right", frameon=True, fancybox=True, facecolor="white")
+ax_cdf.set_xlabel("Task Difficulty (b)", fontsize=14, labelpad=8, **cdf_font)
+ax_cdf.set_ylabel("Cumulative Proportion", fontsize=14, labelpad=8, **cdf_font)
+ax_cdf.set_title("SWE-bench: CDF of IRT Difficulty", fontsize=16, fontweight="bold", pad=12, **cdf_font)
+ax_cdf.legend(loc="lower right", frameon=True, fancybox=True, facecolor="white", prop={"family": "monospace", "size": 12})
 ax_cdf.grid(True, which="major", linestyle="--", alpha=0.4)
 ax_cdf.set_ylim(0, 1.02)
+for label in ax_cdf.get_xticklabels() + ax_cdf.get_yticklabels():
+    label.set_fontfamily("monospace")
+
+# Fine print methodology
+methodology = (
+    "Difficulty (b) estimated via 2-parameter logistic IRT (py-irt, hierarchical priors, 1000 epochs SVI).\n"
+    "500 SWE-bench Verified tasks scored binary pass/fail across 176 model+scaffold submissions.\n"
+    "32 tasks never solved by any model; their b values are prior-regularized extrapolations."
+)
+fig_cdf.text(0.5, -0.02, methodology, ha="center", va="top", fontsize=7,
+             fontfamily="monospace", color="#555555", style="italic")
 
 fig_cdf.tight_layout()
+fig_cdf.subplots_adjust(bottom=0.18)
 output_path_cdf = BASE_DIR / "plots" / "swebench_difficulty_cdf.pdf"
 fig_cdf.savefig(output_path_cdf, dpi=300, bbox_inches="tight")
 print(f"CDF plot saved to {output_path_cdf}")
