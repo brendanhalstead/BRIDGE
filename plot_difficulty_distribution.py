@@ -210,15 +210,25 @@ for _, row in frontier.iterrows():
             break
     ax_ab.annotate(label, (row["release_date"], row["ability"]),
                    textcoords="offset points", xytext=(8, 4), fontsize=7,
-                   color="#1a1a1a", alpha=0.8)
+                   fontfamily="monospace", color="#1a1a1a", alpha=0.8)
 
-ax_ab.set_xlabel("Release Date", fontsize=14, labelpad=8)
-ax_ab.set_ylabel("Model Ability (\u03b8)", fontsize=14, labelpad=8)
-ax_ab.set_title("Frontier Model Ability Over Time", fontsize=16, fontweight="bold", pad=12)
-ax_ab.legend(loc="upper left", frameon=True, fancybox=True, facecolor="white", fontsize=11)
+mono_ab = {"fontfamily": "monospace"}
+ax_ab.set_xlabel("Release Date", fontsize=14, labelpad=8, **mono_ab)
+ax_ab.set_ylabel("Model Ability (\u03b8)", fontsize=14, labelpad=8, **mono_ab)
+ax_ab.set_title("Frontier Model Ability Over Time", fontsize=16, fontweight="bold", pad=12, **mono_ab)
+ax_ab.legend(loc="upper left", frameon=True, fancybox=True, facecolor="white",
+             prop={"family": "monospace", "size": 11})
 ax_ab.grid(True, which="major", linestyle="--", alpha=0.4)
+for label in ax_ab.get_xticklabels() + ax_ab.get_yticklabels():
+    label.set_fontfamily("monospace")
+
+fig_ab.text(0.5, -0.02,
+    'Adopted from the data in Liu et al., "BRIDGE: Predicting Human Task Completion Time '
+    'From Model Performance" (arXiv:2602.07267, 2026).',
+    ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
 
 fig_ab.tight_layout()
+fig_ab.subplots_adjust(bottom=0.12)
 output_path_ab = BASE_DIR / "plots" / "frontier_ability_over_time.pdf"
 fig_ab.savefig(output_path_ab, dpi=300, bbox_inches="tight")
 print(f"Frontier ability plot saved to {output_path_ab}")
