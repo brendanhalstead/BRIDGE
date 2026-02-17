@@ -174,6 +174,55 @@ for name, bdf in benchmark_data.items():
     n_unsolved = (bdf["success_rate"] == 0).sum()
     plot_cdf(vals, name, FILE_KEYS[name], n_unsolved=n_unsolved)
 
+# --- Violin comparison across all benchmarks ---
+bench_order = ["SWE-bench", "GDPval", "MLE-bench", "HCAST", "SWAA", "Cybench", "RE-Bench"]
+violin_data = [benchmark_data[name]["b"].to_numpy() for name in bench_order]
+violin_counts = [len(d) for d in violin_data]
+violin_labels = [f"{name}\n(n={n})" for name, n in zip(bench_order, violin_counts)]
+
+fig_v, ax_v = plt.subplots(figsize=(12, 6))
+mono_v = {"fontfamily": "monospace"}
+
+parts_v = ax_v.violinplot(violin_data, positions=range(len(bench_order)),
+                          showmedians=True, showextrema=False, vert=True)
+for body in parts_v["bodies"]:
+    body.set_facecolor(PRIMARY_COLOR)
+    body.set_alpha(0.5)
+    body.set_edgecolor(EDGE_COLOR)
+    body.set_linewidth(1.2)
+parts_v["cmedians"].set_color("#e63946")
+parts_v["cmedians"].set_linewidth(2)
+
+ax_v.set_xticks(range(len(bench_order)))
+ax_v.set_xticklabels(violin_labels, fontsize=10, fontfamily="monospace")
+ax_v.set_ylabel("Task Difficulty (b)", fontsize=14, labelpad=8, **mono_v)
+ax_v.set_title("Task Difficulty Distribution by Benchmark", fontsize=16, fontweight="bold", pad=12, **mono_v)
+ax_v.grid(True, which="major", linestyle="--", alpha=0.4, axis="y")
+for label in ax_v.get_yticklabels():
+    label.set_fontfamily("monospace")
+
+# Annotate unsolved counts
+for i, name in enumerate(bench_order):
+    bdf = benchmark_data[name]
+    n_unsolved = (bdf["success_rate"] == 0).sum()
+    if n_unsolved > 0:
+        ax_v.text(i, bdf["b"].max() + 0.3, f"{n_unsolved} unsolved",
+                  ha="center", va="bottom", fontsize=7, fontfamily="monospace",
+                  color="#d62828", style="italic")
+
+fig_v.text(0.5, -0.02,
+    "Difficulty (b) estimated via 2-parameter logistic IRT (py-irt, hierarchical priors, 1000 epochs SVI).\n"
+    "Red line = median. Tasks never solved by any model have prior-regularized b estimates.\n"
+    'Data: Liu et al., "BRIDGE: Predicting Human Task Completion Time From Model Performance" (arXiv:2602.07267, 2026).',
+    ha="center", va="top", fontsize=7, fontfamily="monospace", color="#555555", style="italic")
+
+fig_v.tight_layout()
+fig_v.subplots_adjust(bottom=0.16)
+output_path_v = BASE_DIR / "plots" / "benchmark_difficulty_violins.pdf"
+fig_v.savefig(output_path_v, dpi=300, bbox_inches="tight")
+print(f"Violin comparison plot saved to {output_path_v}")
+plt.close(fig_v)
+
 # --- Frontier model ability over time ---
 from scipy import stats
 
